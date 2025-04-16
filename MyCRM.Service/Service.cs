@@ -5,6 +5,7 @@ using MyCRM.Repository.Common;
 using MyCRM.Service.Common;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -46,6 +47,31 @@ namespace MyCRM.Service
             return userDb;
         }
 
+        public async Task<bool> PutUser(PisUsersDResetar user)
+        {
+            return await _repository.PutUser(user);
+        }
+
+        public List<int> GetBillingYears(int userId)
+        {
+            List<int> years = _repository.GetBillingYears(userId)
+                                        .OrderByDescending(y => y)
+                                        .Distinct()
+                                        .ToList();
+            return years;
+        }
+        public Task<List<int>> GetDashboardData(int userId, int year)
+        {
+            Task<List<int>> data = _repository.GetDashboardData(userId, year);
+
+            return data;
+        }
+        public Task<List<int>> GetReport(int userId, int month_from, int year_from, int month_to, int year_to, string mode)
+        {
+            Task<List<int>> data = _repository.GetReport(userId, month_from, year_from, month_to, year_to, mode);
+
+            return data;
+        }
         public IEnumerable<Billing> GetUserBills(int userId)
         {
             IEnumerable<Billing> bills = _repository.GetUserBills(userId);
@@ -77,17 +103,21 @@ namespace MyCRM.Service
             return await _repository.AddUserAsync(userDomain);
         }
 
-        public async Task<bool> AuthenticateUser(string email, string password)
+        public async Task<Tuple<UsersDomain, List<ErrorMessage>>> AuthenticateUser(string email, string password)
         {
-            IEnumerable<PisUsersDResetar> usersDb = _repository.GetAllUsersDb();
-            foreach (PisUsersDResetar user in usersDb)
+            List<ErrorMessage> errorMessages = new List<ErrorMessage>();
+            IEnumerable<UsersDomain> usersDb = _repository.GetAllUsers();
+            foreach (UsersDomain user in usersDb)
             {
-                if (user.email == email && user.password == password)
+                Debug.WriteLine(user.UserApproved);
+                if (user.UserEmail == email && user.Password == password)
                 {
-                    return true;
+                    errorMessages.Add(new ErrorMessage("Successful login."));
+                    return new Tuple<UsersDomain, List<ErrorMessage>>(user, errorMessages);
                 }
             }
-            return false;
+            errorMessages.Add(new ErrorMessage("Invalid email or password."));
+            return new Tuple<UsersDomain, List<ErrorMessage>>(null, errorMessages);
         }
         #region AdditionalCustomFunctions
         public async Task<bool> IsValidUser(int id)
@@ -118,6 +148,19 @@ namespace MyCRM.Service
                 erorMessages.Add(new ErrorMessage("Podatci nisu u ispravnom obliku!"));
             }
             return new Tuple<IEnumerable<UsersDomain>, List<ErrorMessage>>(usersDomain, erorMessages);
+        }
+        public PisUsersDResetar GetUser(int userId)
+        {
+            return _repository.GetUser(userId);
+        }
+        public async Task<bool> AddUserDevice(UserDeviceModel device)
+        {
+                return await _repository.AddUserDevice(device);
+        }
+
+        public async Task<bool> UpdateTariffAndArchive(int month, int year, decimal price, int tariffId)
+        {
+            return await _repository.UpdateTariffAndArchive(month, year, price, tariffId);
         }
         #endregion AdditionalCustomFunctions
     }

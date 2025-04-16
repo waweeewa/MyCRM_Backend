@@ -17,6 +17,7 @@ using MyCRM.Repository.Automapper;
 using MyCRM.Service.Common;
 using MyCRM.Repository;
 using MyCRM.Service;
+using AutoMapper;
 
 namespace MyCRM.WebAPI
 {
@@ -42,13 +43,26 @@ namespace MyCRM.WebAPI
 
             services.AddSingleton<IRepositoryMappingService, RepositoryMappingService>();
 
-            services.AddCors();
+            services.AddCors(options =>
+            {
+                options.AddPolicy("AllowSpecificOrigin",
+                    builder =>
+                    {
+                        builder.WithOrigins("http://localhost:5173")
+                               .AllowAnyHeader()
+                               .AllowAnyMethod()
+                               .AllowCredentials();
+                    });
+            });
+
             services.AddControllers();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseCors("AllowSpecificOrigin");
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();

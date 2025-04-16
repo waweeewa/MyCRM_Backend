@@ -19,7 +19,7 @@ namespace MyCRM.DAL.DataModel
         public int? zipcode { get; set; }
         public string? country { get; set; }
         public string birthdate { get; set; }
-        public int? tariffId { get; set; }
+        public int tariffId { get; set; }
         public byte? admincheck { get; set; }
     }
 }

@@ -18,6 +18,13 @@ namespace MyCRM.Service.Common
         Task<Tuple<UsersDomain, List<ErrorMessage>>> GetUserDomainByUserId(int userId);
         Task<bool> AddUserAsync(PisUsersDResetar userDomain);
         Task<bool> IsValidUser(int id);
-        Task<bool> AuthenticateUser(string email, string password);
+        List<int> GetBillingYears(int userId);
+        Task<List<int>> GetDashboardData(int userId, int year);
+        Task<List<int>> GetReport(int userId, int month_from, int year_from, int month_to, int year_to, string mode);
+        PisUsersDResetar GetUser(int userId);
+        Task<bool> PutUser(PisUsersDResetar user);
+        Task<bool> AddUserDevice(UserDeviceModel device);
+        Task<Tuple<UsersDomain, List<ErrorMessage>>> AuthenticateUser(string email, string password);
+        Task<bool> UpdateTariffAndArchive(int month, int year, decimal price, int tariffId);
     }
 }

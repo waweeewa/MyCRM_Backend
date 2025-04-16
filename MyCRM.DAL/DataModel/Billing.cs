@@ -17,7 +17,7 @@ namespace MyCRM.DAL.DataModel
         public int UserId { get; set; }
 
         [Column("paid")]
-        public int Paid { get; set; }
+        public decimal Paid { get; set; }
 
         [Column("month")]
         public int Month { get; set; }
@@ -27,6 +27,12 @@ namespace MyCRM.DAL.DataModel
 
         [Column("usedPower")]
         public int UsedPower { get; set; }
+
+        [Column("deviceId")]
+        public int DeviceId { get; set; }
+
+        [Column("tarriffId")]
+        public int TarriffId { get; set; }
     }
 
 }
