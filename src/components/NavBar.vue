@@ -45,7 +45,7 @@ export default {
           isOpen: false,
           contents: ['Devices', 'Users', 'Tariff Models']
         },
-        { title: 'Billing', contents: ['Invoices', 'Invoice archive'], isOpen: false}
+        { title: 'Billing', contents: ['Invoices'], isOpen: false}
       ],
       accordionItemsUser: [
         { title: 'Home', contents: ['Dashboard'], isOpen: false},

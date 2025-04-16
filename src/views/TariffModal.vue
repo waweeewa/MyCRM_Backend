@@ -55,7 +55,10 @@ export default {
         }
             else if(props.addEdit === 'Edit'){
                 console.log('Edit', props.tariffData);
-                await PutTariffs(props.tariffData.id, props.tariffData.tariffModel, props.tariffData.price)
+                // Use current month and year for PUT call
+                const currentMonth = new Date().getMonth() + 1;
+                const currentYear = new Date().getFullYear();
+                await PutTariffs(currentMonth, currentYear, props.tariffData.price, props.tariffData.id);
                 emit('refreshData');
                 emit('close');
             }

@@ -38,8 +38,8 @@
                 <Dropdown id="tariff" v-model="userData.tarriff" :options="tariffs" optionLabel="label" optionValue="value" placeholder="Select a tariff"/>
             </div>
             <div class="rightInput">
-                <label for="isAdmin" style="font-size:20px; margin-right: 10px; margin-left: 5px;">Admin</label>
-                <Checkbox v-model="isAdmin" :binary="true" :disabled="isEmailMatched"></Checkbox>            
+                <label for="admincheck" style="font-size:20px; margin-right: 10px; margin-left: 5px;">Admin</label>
+                <Checkbox v-model="admincheck" :binary="true" :disabled="isEmailMatched"></Checkbox>            
             </div>
         </div>
         <div class="modalActions">
@@ -117,14 +117,14 @@ export default {
                 tariff: null,
                 admincheck: 0,
             },
-            isAdmin: false,
+            admincheck: false,
             tariffs: [] // Define tariffs in data
         };
     },
     methods: {
         async fetchUser() {
             this.userData = this.currentUserData;
-            this.isAdmin = this.userData.admincheck === 1;
+            this.admincheck = this.userData.admincheck === 1;
         },
         async fetchTariffs() {
     try {
@@ -158,6 +158,8 @@ formatDate(date) {
     async save() {
         this.userData.zipcode = parseInt(this.userData.zipcode);
         if (this.userData.birthdate) {
+            // Convert Boolean admincheck to a number (0 or 1)
+            this.userData.admincheck = this.admincheck ? 1 : 0;
             this.userData.birthdate = this.formatDate(this.userData.birthdate);
         }
         if (this.addEdit === 'Add') {

@@ -7,9 +7,9 @@
       <Button label="Add" icon="pi pi-plus" @click="onAdd" class="mb-2" style="overflow-y: auto; margin-top: 300px"/>
         <Calendar style="margin-left: 10px;" v-model="selectedYear" view="year" dateFormat="yy" placeholder="Select Year" class="mb-2" @change="applyFilters" />
         <Calendar style="margin-left: 10px;" v-model="selectedMonth" view="month" dateFormat="mm" placeholder="Select Month" class="mb-2" @change="applyFilters" />
-        <InputText style="margin-left: 10px;" v-model="selectedEmail" placeholder="Type Email" class="mb-2" @input="applyFilters" />
+        <InputText :hidden="!isAdmin.value" style="margin-left: 10px;" v-model="selectedEmail" placeholder="Type Email" class="mb-2" @input="applyFilters" />
       <div class="datatable-background">
-        <DataTable :value="filteredTariffs" class="custom-datatable">
+        <DataTable :value="filteredTariffs" class="custom-datatable" paginator rows="10">
           <Column field="email" header="E-mail" class="wide-column"></Column>
           <Column field="month" header="Month" style="min-width: 10rem;"></Column>
           <Column field="year" header="Year" style="min-width: 10rem;"></Column>
@@ -113,7 +113,10 @@ export default {
       this.displayConfirmDeleteDialog = true;
     },
     async onDownload(tariff) {
-      await DownloadBill(tariff.userId, tariff.month, tariff.year);
+      // Get the logged user's id from localStorage
+      const loguserId = localStorage.getItem('userID');
+      // Call DownloadBill with tariff info and loguserId
+      await DownloadBill(tariff.userId, tariff.month, tariff.year, loguserId);
       console.log('Download button clicked', tariff);
     },
     async confirmDeleteTariff() {
@@ -131,7 +134,8 @@ export default {
     },
     async fetchInvoices() {
       try {
-        const response = await GetInvoices();
+        const userId = localStorage.getItem('userID'); // Use userId from localStorage
+        const response = await GetInvoices(userId);
         if (response && response.data) {
           this.tariffs = response.data.map(device => ({
             id: device.billId,
@@ -142,7 +146,7 @@ export default {
             usedPower: device.usedPower,
             paidAmount: device.paidAmount,
             price: device.totalAmount,
-            new: device.totalAmount - device.paidAmount,
+            new: parseFloat((device.totalAmount - device.paidAmount).toFixed(2)),
             unit: device.tariff,
             isArchive: device.isArchive
           }));

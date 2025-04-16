@@ -7,6 +7,7 @@
       <div class="actions-container">
         <Button label="Add" icon="pi pi-plus" @click="onAdd" class="mr-2" />
         <AutoComplete 
+          v-if="isAdmin"
           v-model="emailFilter" 
           @complete="searchEmails" 
           placeholder="Filter by email" 

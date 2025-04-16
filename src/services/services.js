@@ -21,6 +21,10 @@ export function GetPartnerDataDataDashboard(id, fromMonth, fromYear, toMonth, to
     return axios.get(mainCall + "Users/" + id + "/"+ fromMonth + "/" + fromYear + "/" + toMonth + "/" + toYear + "/" + mode + "/report");
 }
 
+export function GetPartnerDataDataDashboardPrice(id, fromMonth, fromYear, toMonth, toYear, mode){
+    return axios.get(mainCall + "Users/" + id + "/"+ fromMonth + "/" + fromYear + "/" + toMonth + "/" + toYear + "/" + mode + "/reportTariffArchive");
+}
+
 export function fetchYearsForUser(id){
     return axios.get(mainCall + "Users/" + id + "/years");
 }
@@ -63,12 +67,8 @@ export function PostTariffs(name, price){
     });
 }
 
-export function PutTariffs(tId, name, price,){
-    return axios.put(mainCall + "Tariff/put", {
-        tId: tId,
-        name: name,
-        price: parseFloat(price) 
-    });
+export function PutTariffs(month, year, price, tariffId) {
+    return axios.put(mainCall + "Tariff/put/" + month + "/" + year + "/" + price + "/" + tariffId);
 }
 
 export function DeleteTariffs(tId, name, price,){
@@ -86,8 +86,8 @@ export function DeleteTariffs(tId, name, price,){
 export function GetTariffs(){
     return axios.get(mainCall + "Tariff");
 }
-export function GetInvoices(){
-    return axios.get(mainCall + "Invoice");
+export function GetInvoices(userId){
+    return axios.get(mainCall + "Invoice/" + userId);
 }
 export function DeleteInvoices(userId, month, year) {
     return axios.delete(mainCall + "Invoice/delete/" + userId + "/" + month + "/" + year);
@@ -99,8 +99,8 @@ export function PostInvoices(userId, month, year, usedPower, tariffId, deviceId)
 export function PutInvoices(billId, userId, email, month, year, usedPower, paidAmount, deviceId ,tariffId) {
     return axios.put(mainCall + "Invoice/put/" + billId+"/"+ userId + "/" + email + "/" + month + "/" + year + "/" + usedPower + "/" + paidAmount + "/" + deviceId + "/" + tariffId);
 }
-export function DownloadBill(userId, month, year) {
-    return axios.get(mainCall + "Users/" + userId + "/bills/" + month + "/" + year, {
+export function DownloadBill(userId, month, year, loguserId) {
+    return axios.get(mainCall + "Users/" + userId + "/bills/" + month + "/" + year + "/" +loguserId, {
         responseType: 'blob' // Ensure the response is treated as a Blob
     }).then((response) => {
         // Create a URL for the blob
@@ -176,6 +176,9 @@ export function PostDevices(any){
     });
 }
 
+export function UpdateDevice(deviceId, day_from, month_from, year_from, day_to, month_to, year_to) {
+    return axios.put(mainCall + "Device/" + deviceId + "/" + day_from + "/" + month_from + "/" + year_from + "/" + day_to + "/" + month_to + "/" + year_to);
+}
 
 export function DeleteDevice(id){
     return axios.delete(mainCall + "UserDevice/delete/" + id);
@@ -187,4 +190,8 @@ export function AvailableDevices(id,month,year){
 
 export function GetInvoice(id, mond, year){
     return axios.get(mainCall + "Invoice/" + id + "/" + mond + "/" + year);
+}
+
+export function GetElectricitySummary(userId){
+    return axios.get(mainCall + "electricity-summary/" + userId);
 }

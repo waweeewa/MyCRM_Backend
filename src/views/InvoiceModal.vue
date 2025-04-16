@@ -3,11 +3,11 @@
         <div class="deviceData" style="margin-bottom: 20px">
             <div class="leftInput" >
                 <label v-if="addEdit !== 'Add'">User:</label>
-                <Dropdown id="user" v-model="selectedEmail" :options="users" :disabled="!isAdmin" placeholder="User" style="width: 250px;" />
+                <Dropdown id="user" v-model="selectedEmail" :options="users" optionLabel="label" optionValue="value" :disabled="!isAdmin" placeholder="User" style="width: 250px;" />
             </div>
             <div class="rightInput" v-if="addEdit === 'Edit'">
                 <label>Left to pay: {{ tariffData.price - tariffData.paidAmount }}$</label>
-                <InputText id="paidAmount" v-model="enteredPaidAmount" :disabled="tariffData.price - tariffData.paidAmount == 0" placeholder="Paid Amount" style="width: 250px; height: 44px; font-size: medium;" />
+                <InputText id="paidAmount" v-model.number="enteredPaidAmount" :disabled="tariffData.price - tariffData.paidAmount == 0" placeholder="Paid Amount" style="width: 250px; height: 44px; font-size: medium;" />
             </div>
         </div>
         <div class="deviceData" style="margin-bottom: 20px">
@@ -81,6 +81,7 @@ export default {
         const selectedYear = ref(props.tariffData.year);
         const isSaveDisabled = ref(false);
         const enteredPaidAmount = ref(''); // New variable for entered paid amount
+        const isProcessing = ref(false); // New flag for duplicate prevention
         const months = ref([
             { name: '1', value: 1 },
             { name: '2', value: 2 },
@@ -189,6 +190,7 @@ export default {
         }
 
         function validateAndSave() {
+            if (isProcessing.value) return;  // Prevent duplicate calls
             let invalidDevices = [];
 
             devices.value.forEach((device) => {
@@ -214,9 +216,11 @@ export default {
             }
 
             if (props.addEdit === 'Edit') {
-                // Check if enteredPaidAmount + tariffData.paidAmount exceeds tariffData.price
-                const totalPaidAmount = parseFloat(enteredPaidAmount.value) + parseFloat(props.tariffData.paidAmount);
-                if (isNaN(parseFloat(enteredPaidAmount.value))) {
+                // Use 0 as default if field is empty
+                const enteredValue = enteredPaidAmount.value === '' ? 0 : parseFloat(enteredPaidAmount.value);
+                const totalPaidAmount = enteredValue + parseFloat(props.tariffData.paidAmount);
+                
+                if (isNaN(enteredValue)) {
                     const errorMessage = `The paid amount (${enteredPaidAmount.value}) must be a valid number. Please check and update the values.`;
                     toast.error(errorMessage, {
                         position: toast.POSITION.TOP_CENTER,
@@ -227,7 +231,7 @@ export default {
                         draggable: true,
                     });
                     return;
-                } else if (parseFloat(enteredPaidAmount.value) < 0) {
+                } else if (enteredValue < 0) {
                     const errorMessage = `The paid amount (${enteredPaidAmount.value}) cannot be negative. Please check and update the values.`;
                     toast.error(errorMessage, {
                         position: toast.POSITION.TOP_CENTER,
@@ -257,9 +261,12 @@ export default {
         }
 
         function save() {
+            if(isProcessing.value) return;
+            isProcessing.value = true; // Prevent duplicate processing
             const selectedUser = data.value.find((user) => user.userEmail === selectedEmail.value);
             if (props.addEdit === 'Add') {
                 devices.value.forEach((device) => {
+                    console.log(device);
                     PostInvoices(selectedUser.userId, selectedMonth.value, selectedYear.value, device.input2, selectedUser.tariffId, device.udId);
                 });
                 console.log('Add', { ...props.tariffData, month: selectedMonth.value, year: selectedYear.value });
@@ -309,6 +316,7 @@ export default {
                 emit('refreshData');
                 emit('close');
             }
+            isProcessing.value = false; // Reset flag after processing
         }
 
         function generateYearsArray(startYear, endYear) {
@@ -340,7 +348,7 @@ export default {
             }
         });
 
-        return { cancel, validateAndSave, save, users, selectedEmail, selectedMonth, selectedYear, enteredPaidAmount, months, years, devices, isAdmin, isSaveDisabled };
+        return { cancel, validateAndSave, save, users, selectedEmail, selectedMonth, selectedYear, enteredPaidAmount, months, years, devices, isAdmin, isSaveDisabled, isProcessing };
     },
 };
 </script>

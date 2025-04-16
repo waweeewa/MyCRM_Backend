@@ -2,7 +2,8 @@
     <div class="modalDevice">
         <div class="deviceData" style="margin-bottom: 20px; margin-left: 80px;">
             <div class="leftInput">
-                <Dropdown v-model="currentUserData.email" :options="emails" optionLabel="label" optionValue="value" style="width: 244px; height: 50px;" placeholder="Select E-mail" class="custom-dropdown" @change="fetchDevices"/>
+                <!-- Modified Dropdown: auto-select and disable for non-admin users -->
+                <Dropdown v-model="currentUserData.email" :options="emails" optionLabel="label" optionValue="value" style="width: 244px; height: 50px;" placeholder="Select E-mail" class="custom-dropdown" @change="fetchDevices" :disabled="!isAdmin" />
             </div>
             <div class="rightInput">
                 <InputText v-model="currentUserData.name" placeholder="Device name" />
@@ -38,7 +39,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
-import { GetUsers, PostDevices, AvailableDevices } from '../services/services.js';
+import { GetUsers, PostDevices, AvailableDevices, UpdateDevice } from '../services/services.js';
 
 export default {
     components: {
@@ -93,6 +94,7 @@ export default {
         onMounted(() => {
             fetchUsers();
             if (!isAdmin.value) {
+                // Auto-select using localStorage email for non-admin users.
                 currentUserData.value.email = userEmail.value;
                 fetchDevices();
             }
@@ -138,7 +140,25 @@ export default {
                 this.$emit('refreshData');
                 this.$emit('close');
             } else if (this.addEdit === 'Edit') {
-                console.log('Edit', this.currentUserData);
+                // Extract deviceId and date parts
+                const deviceId = this.currentUserData.udId;
+                const fromDate = new Date(this.currentUserData.from_date);
+                const toDate = new Date(this.currentUserData.to_date);
+                const day_from = fromDate.getDate();
+                const month_from = fromDate.getMonth() + 1;
+                let year_from = fromDate.getFullYear();
+                const day_to = toDate.getDate();
+                const month_to = toDate.getMonth() + 1;
+                let year_to = toDate.getFullYear();
+                // Fallback to current year if the parsed value is not four digits
+                if (year_from.toString().length !== 4) {
+                    year_from = new Date().getFullYear();
+                }
+                if (year_to.toString().length !== 4) {
+                    year_to = new Date().getFullYear();
+                }
+                // Call the API endpoint for updating device
+                await UpdateDevice(deviceId, day_from, month_from, year_from, day_to, month_to, year_to);
                 this.$emit('refreshData');
                 this.$emit('close');
             }

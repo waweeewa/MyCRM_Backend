@@ -10,6 +10,9 @@
   <Dialog v-model:visible="displayModal" :style="{ width: '850px' }">
     <UserModal :currentUserData="user" @close="displayModal = false" addEdit="Edit"/>
   </Dialog>
+  <Dialog v-model:visible="reportModalVisible" :style="{ width: '850px' }" draggable={false}>
+    <ElectricitySummaryModal :userId="userID" :visible="reportModalVisible" @update:visible="reportModalVisible = $event" />
+  </Dialog>
 </template>
 
 <script>
@@ -19,13 +22,15 @@ import { ref, computed } from 'vue';
 import { GetUser } from '../services/services.js';
 import UserModal from '../views/UserModal.vue';
 import Dialog from 'primevue/dialog';
+import ElectricitySummaryModal from '../views/ElectricitySummaryModal.vue';
 
 export default {
   components: {
     Menu,
     Button,
     UserModal,
-    Dialog
+    Dialog,
+    ElectricitySummaryModal
   },
   setup() {
     const menu = ref(null);
@@ -36,8 +41,9 @@ export default {
 
     // Example: Fetching email from localStorage or a store
     const userEmail = computed(() => localStorage.getItem('email'));
+    const userID = localStorage.getItem('userID');
 
-    return { menu, toggleMenu, userEmail };
+    return { menu, toggleMenu, userEmail, userID };
   },
   data() {
     return {
@@ -66,6 +72,7 @@ export default {
         // Add more items as needed
       ],
       displayModal: false,
+      reportModalVisible: false,
       user: {}
     };
   },
@@ -121,10 +128,9 @@ export default {
     },
     async report() {
       try{
-        const response = 0;                           //fill later
-
+        this.reportModalVisible = true;
       } catch (error) {
-        console.error('Error fetching report data:', error);
+        console.error('Error opening report modal:', error);
       }
     }
   }
