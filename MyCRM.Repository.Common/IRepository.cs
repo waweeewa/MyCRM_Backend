@@ -40,8 +40,9 @@ namespace MyCRM.Repository.Common
         IEnumerable<UserDeviceModel> GetUserDevices();
         Task<InvoiceGET> GetInvoiceByMonth(int userId, int month, int year);
         string Test();
-        Task<(int lastMonthConsumption, decimal lastMonthPrice, int currentYearConsumption, decimal currentYearTotalPrice, int lastYearConsumption, decimal lastYearTotalPrice, List<int> monthlyConsumption, int consumptionDiff)> GetElectricitySummaryExport(int userId);
+        Task<(int lastMonthConsumption, decimal lastMonthPrice, int currentYearConsumption, decimal currentYearTotalPrice, int lastYearConsumption, decimal lastYearTotalPrice, List<int> monthlyConsumption, int consumptionDiff, double winterAverage, double summerAverage, decimal medianLastYearConsumption, List<double> trendPrediction, string modMonthName)> GetElectricitySummaryExport(int userId);
         Task<bool> UpdateTariffAndArchive(int month, int year, decimal price, int tariffId);
         Task<bool> PutUserDevice(int deviceId, int day_from, int month_from, int year_from, int day_to, int month_to,int year_to);
+        Task<int> GetMonthWithHighestUsage(int userId);
     }
 }

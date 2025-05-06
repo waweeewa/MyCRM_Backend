@@ -12,6 +12,7 @@ using System.Collections;
 using iTextSharp.text;
 using static MyCRM.Model.BillExport;
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 
 namespace MyCRM.Repository
 {
@@ -912,9 +913,8 @@ namespace MyCRM.Repository
             return verifiedDevices;
         }
 
-        public async Task<(int lastMonthConsumption, decimal lastMonthPrice, int currentYearConsumption, decimal currentYearTotalPrice, int lastYearConsumption, decimal lastYearTotalPrice, List<int> monthlyConsumption, int consumptionDiff)> GetElectricitySummaryExport(int userId)
+        public async Task<(int lastMonthConsumption, decimal lastMonthPrice, int currentYearConsumption, decimal currentYearTotalPrice, int lastYearConsumption, decimal lastYearTotalPrice, List<int> monthlyConsumption, int consumptionDiff, double winterAverage, double summerAverage, decimal medianLastYearConsumption, List<double> trendPrediction, string modMonthName)> GetElectricitySummaryExport(int userId)
         {
-            // Use current system date for calculations
             DateTime now = DateTime.Now;
             int currentYear = now.Year;
             int currentMonth = now.Month;
@@ -922,21 +922,37 @@ namespace MyCRM.Repository
             int lastMonthYear = currentMonth == 1 ? currentYear - 1 : currentYear;
             int lastYear = currentYear - 1;
 
-            // Helper method to calculate consumption for a given year and month.
+            // Improved GetConsumption function that accounts for multiple devices
             int GetConsumption(int year, int month)
             {
-                int prevMonth = month == 1 ? 12 : month - 1;
-                int prevYear = month == 1 ? year - 1 : year;
-                int currentUsed = appDbContext.Billings
+                int totalConsumption = 0;
+                // Get all bills for the current month
+                var currentMonthBills = appDbContext.Billings
                     .Where(b => b.UserId == userId && b.Year == year && b.Month == month)
-                    .Sum(b => b.UsedPower);
-                int previousUsed = appDbContext.Billings
-                    .Where(b => b.UserId == userId && b.Year == prevYear && b.Month == prevMonth)
-                    .Sum(b => b.UsedPower);
-                return Math.Max(0, currentUsed - previousUsed);
+                    .ToList();
+
+                // For each device in the current month, find its previous month's reading and calculate difference
+                foreach (var bill in currentMonthBills.GroupBy(b => b.DeviceId))
+                {
+                    int deviceId = bill.Key;
+                    int currentPower = bill.Sum(b => b.UsedPower);
+                    
+                    // Get previous month
+                    int prevMonth = month == 1 ? 12 : month - 1;
+                    int prevYear = month == 1 ? year - 1 : year;
+                    
+                    // Get previous month's reading for this device
+                    int previousPower = appDbContext.Billings
+                        .Where(b => b.UserId == userId && b.DeviceId == deviceId && b.Year == prevYear && b.Month == prevMonth)
+                        .Sum(b => b.UsedPower);
+                    
+                    // Add this device's consumption to the total
+                    totalConsumption += Math.Max(0, currentPower - previousPower);
+                }
+                
+                return totalConsumption;
             }
 
-            // Last month consumption and price
             int lmConsumption = GetConsumption(lastMonthYear, lastMonth);
             decimal lmPricePerUnit = 0;
             var lmBill = appDbContext.Billings
@@ -960,7 +976,6 @@ namespace MyCRM.Repository
             }
             decimal lmTotalPrice = lmConsumption * lmPricePerUnit;
 
-            // Current year totals & monthly consumption for graph
             int currentYearConsumption = 0;
             decimal currentYearTotalPrice = 0;
             List<int> monthlyConsumption = new List<int>();
@@ -992,13 +1007,14 @@ namespace MyCRM.Repository
                 currentYearTotalPrice += cons * pricePerUnit;
             }
 
-            // Last year's totals
             int lastYearConsumption = 0;
             decimal lastYearTotalPrice = 0;
+            List<int> lastYearConsumptions = new List<int>();
             for (int m = 1; m <= 12; m++)
             {
                 int cons = GetConsumption(lastYear, m);
                 lastYearConsumption += cons;
+                lastYearConsumptions.Add(cons);
 
                 decimal pricePerUnit = 0;
                 var bill = appDbContext.Billings.FirstOrDefault(b => b.UserId == userId && b.Year == lastYear && b.Month == m);
@@ -1022,11 +1038,362 @@ namespace MyCRM.Repository
                 lastYearTotalPrice += cons * pricePerUnit;
             }
 
-            // Calculate consumption difference: current month consumption minus last month consumption.
             int currentMonthConsumption = GetConsumption(currentYear, currentMonth);
             int consumptionDiff = currentMonthConsumption - lmConsumption;
 
-            return (lmConsumption, lmTotalPrice, currentYearConsumption, currentYearTotalPrice, lastYearConsumption, lastYearTotalPrice, monthlyConsumption, consumptionDiff);
+            // Calculate averages for winter and summer months
+            var winterMonths = lastYearConsumptions.Where((c, index) => index >= 9 || index <= 2);
+            var summerMonths = lastYearConsumptions.Where((c, index) => index >= 3 && index <= 8);
+            double winterAverage = winterMonths.Any() ? winterMonths.Average() : 0;
+            double summerAverage = summerMonths.Any() ? summerMonths.Average() : 0;
+
+            // Calculate median for last year's consumption
+            decimal medianLastYearConsumption = lastYearConsumptions.OrderBy(c => c).Skip(lastYearConsumptions.Count() / 2).First();
+
+            List<double> trendPrediction = await GetTrendPrediction(userId, currentYear);
+
+            // --- MOD MONTH LOGIC ---
+            // Get all billing data for the user
+            var allBillings = await appDbContext.Billings
+                .Where(b => b.UserId == userId)
+                .ToListAsync();
+
+            // Dictionary to store monthly consumption by year
+            var consumptionByMonth = new Dictionary<int, List<double>>();
+            for (int month = 1; month <= 12; month++)
+                consumptionByMonth[month] = new List<double>();
+
+            var billingsByYear = allBillings
+                .GroupBy(b => b.Year)
+                .OrderBy(g => g.Key);
+
+            foreach (var yearGroup in billingsByYear)
+            {
+                int year = yearGroup.Key;
+                for (int month = 1; month <= 12; month++)
+                {
+                    var monthlyBills = yearGroup.Where(b => b.Month == month).ToList();
+                    if (!monthlyBills.Any())
+                        continue;
+                    double totalMonthConsumption = 0;
+                    foreach (var deviceGroup in monthlyBills.GroupBy(b => b.DeviceId))
+                    {
+                        int deviceId = deviceGroup.Key;
+                        double currentReading = deviceGroup.Sum(b => b.UsedPower);
+                        int prevMonth = month == 1 ? 12 : month - 1;
+                        int prevYear = month == 1 ? year - 1 : year;
+                        double previousReading = allBillings
+                            .Where(b => b.UserId == userId && b.DeviceId == deviceId &&
+                                        b.Year == prevYear && b.Month == prevMonth)
+                            .Sum(b => b.UsedPower);
+                        totalMonthConsumption += Math.Max(0, currentReading - previousReading);
+                    }
+                    if (totalMonthConsumption > 0)
+                        consumptionByMonth[month].Add(totalMonthConsumption);
+                }
+            }
+
+            var monthlyAverages = new Dictionary<int, double>();
+            for (int month = 1; month <= 12; month++)
+            {
+                var monthData = consumptionByMonth[month];
+                monthlyAverages[month] = monthData.Any() ? monthData.Average() : 0;
+            }
+            int modMonth = monthlyAverages.OrderByDescending(kvp => kvp.Value).First().Key;
+            string modMonthName = new DateTime(2000, modMonth, 1).ToString("MMMM");
+
+            return (lmConsumption, lmTotalPrice, currentYearConsumption, currentYearTotalPrice, lastYearConsumption, lastYearTotalPrice, monthlyConsumption, consumptionDiff, winterAverage, summerAverage, medianLastYearConsumption, trendPrediction, modMonthName);
+        }
+        public async Task<List<double>> GetTrendPrediction(int userId, int year)
+        {
+            List<double> trendValues = new List<double>(12);
+            
+            // Check if we're predicting for a future year
+            bool isFutureYear = year > DateTime.Now.Year;
+            
+            // Check if we already have bills for the selected year - fix client-side GroupBy error
+            var billsInSelectedYear = await appDbContext.Billings
+                .Where(b => b.UserId == userId && b.Year == year)
+                .ToListAsync(); // First fetch the data to memory
+            
+            // Then perform the grouping in memory
+            var existingBillsForYear = billsInSelectedYear
+                .GroupBy(b => b.Month)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            
+            // Get all previous years' billings for trend calculation
+            var allBillings = await appDbContext.Billings
+                .Where(b => b.UserId == userId && b.Year < year)
+                .ToListAsync(); // Fetch to memory first
+
+            if (!allBillings.Any())
+            {
+                // If no historical data, just return zeros
+                for (int month = 1; month <= 12; month++)
+                {
+                    trendValues.Add(0);
+                }
+                return trendValues;
+            }
+            
+            // Get range of years available in historical data
+            int minYear = allBillings.Min(b => b.Year);
+            int maxYear = allBillings.Max(b => b.Year);
+            int yearRange = maxYear - minYear + 1;
+            
+            // Calculate monthly device-level consumption for each historical year and month
+            var monthlyConsumptionByYear = new Dictionary<int, Dictionary<int, double>>();
+            
+            // Process each year separately
+            for (int y = minYear; y <= maxYear; y++)
+            {
+                var yearData = new Dictionary<int, double>();
+                monthlyConsumptionByYear[y] = yearData;
+                
+                // Process each month in this year
+                for (int m = 1; m <= 12; m++)
+                {
+                    // Get bills for this year and month
+                    var monthlyBills = allBillings.Where(b => b.Year == y && b.Month == m).ToList();
+                    
+                    if (!monthlyBills.Any())
+                        continue;
+                        
+                    double totalMonthConsumption = 0;
+                    
+                    // Calculate consumption by device for this month
+                    foreach (var deviceGroup in monthlyBills.GroupBy(b => b.DeviceId))
+                    {
+                        int deviceId = deviceGroup.Key;
+                        double currentReading = deviceGroup.Sum(b => b.UsedPower);
+                        
+                        // Get previous month's reading for this device
+                        int prevMonth = m == 1 ? 12 : m - 1;
+                        int prevYear = m == 1 ? y - 1 : y;
+                        
+                        double previousReading = allBillings
+                            .Where(b => b.UserId == userId && b.DeviceId == deviceId && 
+                                  b.Year == prevYear && b.Month == prevMonth)
+                            .Sum(b => b.UsedPower);
+                        
+                        // Calculate and add consumption for this device
+                        totalMonthConsumption += Math.Max(0, currentReading - previousReading);
+                    }
+                    
+                    // Store the total month consumption
+                    yearData[m] = totalMonthConsumption;
+                }
+            }
+            
+            // Now build a time series of monthly aggregated consumption
+            List<double> timeSeriesData = new List<double>();
+            for (int y = minYear; y <= maxYear; y++)
+            {
+                if (monthlyConsumptionByYear.TryGetValue(y, out var yearData))
+                {
+                    for (int m = 1; m <= 12; m++)
+                    {
+                        if (yearData.TryGetValue(m, out double value))
+                        {
+                            timeSeriesData.Add(value);
+                        }
+                    }
+                }
+            }
+            
+            if (timeSeriesData.Count == 0)
+            {
+                // No valid consumption data found
+                for (int month = 1; month <= 12; month++)
+                {
+                    trendValues.Add(0);
+                }
+                return trendValues;
+            }
+            
+            // Apply linear regression to predict future values
+            double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            int n = timeSeriesData.Count;
+
+            for (int i = 0; i < n; i++)
+            {
+                double x = i + 1; // Time point
+                double y = timeSeriesData[i]; // Consumption value
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumX2 += x * x;
+            }
+
+            double slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            double intercept = (sumY - slope * sumX) / n;
+            
+            // Calculate historical averages by month for better predictions
+            var monthlyAverages = new Dictionary<int, double>();
+            for (int m = 1; m <= 12; m++)
+            {
+                List<double> valuesForMonth = new List<double>();
+                
+                foreach (var yearEntry in monthlyConsumptionByYear)
+                {
+                    if (yearEntry.Value.TryGetValue(m, out double value))
+                        valuesForMonth.Add(value);
+                }
+                
+                if (valuesForMonth.Count > 0)
+                    monthlyAverages[m] = valuesForMonth.Average();
+                else
+                    monthlyAverages[m] = 0;
+            }
+
+            for (int month = 1; month <= 12; month++)
+            {
+                if (existingBillsForYear.ContainsKey(month))
+                {
+                    // Month already has bills, use 0 for prediction
+                    trendValues.Add(0);
+                }
+                else
+                {
+                    // No bills yet, calculate prediction
+                    double trendValue = intercept + slope * (n + month);
+                    
+                    // For future years like 2025, incorporate historical monthly average
+                    if (isFutureYear)
+                    {
+                        double historicalAvg = monthlyAverages.TryGetValue(month, out double avg) ? avg : 0;
+                        
+                        if (yearRange > 0)
+                        {
+                            // Blend trend with historical average, giving more weight to historical data
+                            // for a more stable prediction when we have multiple years of history
+                            double blendedPrediction = (trendValue + historicalAvg * yearRange) / (yearRange + 1);
+                            trendValues.Add(Math.Max(0, blendedPrediction));
+                        }
+                        else
+                        {
+                            trendValues.Add(Math.Max(0, trendValue));
+                        }
+                    }
+                    else
+                    {
+                        trendValues.Add(Math.Max(0, trendValue));
+                    }
+                }
+            }
+
+            return trendValues;
+        }
+
+        public async Task<List<double>> GetMonthlyConsumption(int userId, int year)
+        {
+            List<double> monthlyConsumptions = new List<double>();
+            var billings = await appDbContext.Billings
+                .Where(b => b.UserId == userId && b.Year == year)
+                .OrderBy(b => b.Month)
+                .ToListAsync();
+
+            for (int month = 1; month <= 12; month++)
+            {
+                var currentMonthBilling = billings.FirstOrDefault(b => b.Month == month);
+                var lastMonthBilling = billings.FirstOrDefault(b => b.Month == month - 1);
+
+                double currentConsumption = currentMonthBilling?.UsedPower ?? 0;
+                double lastConsumption = lastMonthBilling?.UsedPower ?? 0;
+
+                double monthlyConsumption = currentConsumption - lastConsumption;
+                monthlyConsumptions.Add(monthlyConsumption);
+            }
+
+            return monthlyConsumptions;
+        }
+
+        public async Task<int> GetMonthWithHighestUsage(int userId)
+        {
+            // Get all billing data for the user
+            var allBillings = await appDbContext.Billings
+                .Where(b => b.UserId == userId)
+                .ToListAsync();
+            
+            if (!allBillings.Any())
+                return 0; // Return 0 if no data available
+            
+            // Dictionary to store monthly consumption by year
+            var consumptionByMonth = new Dictionary<int, List<double>>();
+            
+            // Initialize lists for each month (1-12)
+            for (int month = 1; month <= 12; month++)
+            {
+                consumptionByMonth[month] = new List<double>();
+            }
+            
+            // Group bills by year and month for analysis
+            var billingsByYear = allBillings
+                .GroupBy(b => b.Year)
+                .OrderBy(g => g.Key);
+            
+            // Calculate device-level consumption for each month in each year
+            foreach (var yearGroup in billingsByYear)
+            {
+                int year = yearGroup.Key;
+                
+                for (int month = 1; month <= 12; month++)
+                {
+                    // Get bills for this month and year
+                    var monthlyBills = yearGroup.Where(b => b.Month == month).ToList();
+                    
+                    if (!monthlyBills.Any())
+                        continue;
+                    
+                    double totalMonthConsumption = 0;
+                    
+                    // Calculate consumption by device for this month
+                    foreach (var deviceGroup in monthlyBills.GroupBy(b => b.DeviceId))
+                    {
+                        int deviceId = deviceGroup.Key;
+                        double currentReading = deviceGroup.Sum(b => b.UsedPower);
+                        
+                        // Get previous month's reading for this device
+                        int prevMonth = month == 1 ? 12 : month - 1;
+                        int prevYear = month == 1 ? year - 1 : year;
+                        
+                        double previousReading = allBillings
+                            .Where(b => b.UserId == userId && b.DeviceId == deviceId && 
+                                   b.Year == prevYear && b.Month == prevMonth)
+                            .Sum(b => b.UsedPower);
+                        
+                        // Add device consumption to month total
+                        totalMonthConsumption += Math.Max(0, currentReading - previousReading);
+                    }
+                    
+                    // Only add months with non-zero consumption
+                    if (totalMonthConsumption > 0)
+                        consumptionByMonth[month].Add(totalMonthConsumption);
+                }
+            }
+            
+            // Calculate average consumption for each month
+            var monthlyAverages = new Dictionary<int, double>();
+            
+            for (int month = 1; month <= 12; month++)
+            {
+                var monthData = consumptionByMonth[month];
+                if (monthData.Any())
+                {
+                    monthlyAverages[month] = monthData.Average();
+                }
+                else
+                {
+                    monthlyAverages[month] = 0;
+                }
+            }
+            
+            // Find month with highest average consumption
+            int highestMonth = monthlyAverages
+                .OrderByDescending(kvp => kvp.Value)
+                .First().Key;
+            
+            return highestMonth;
         }
     }
 }

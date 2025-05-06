@@ -523,6 +523,23 @@ namespace MyCRM.WebAPI.Controllers
             IEnumerable<UserDeviceModel> result = _repository.GetUserDevices();
             return Ok(result);
         }
+        [HttpGet]
+        [Route("Users/{userId}/highest-usage-month")]
+        public async Task<IActionResult> GetMonthWithHighestUsage(int userId)
+        {
+            int highestUsageMonth = await _repository.GetMonthWithHighestUsage(userId);
+            
+            if (highestUsageMonth == 0)
+                return NotFound("No consumption data available for this user");
+            
+            // Convert month number to month name
+            string monthName = new DateTime(2020, highestUsageMonth, 1).ToString("MMMM");
+            
+            return Ok(new { 
+                monthNumber = highestUsageMonth, 
+                monthName = monthName
+            });
+        }
         #region AdditionalCustomFunctions
         public async Task<bool> GetLastUserRequestId()
         {
@@ -738,7 +755,13 @@ namespace MyCRM.WebAPI.Controllers
                 CurrentYearPrice = summary.Item4,
                 LastYearConsumption = summary.Item5,
                 LastYearPrice = summary.Item6,
-                MonthlyConsumption = summary.Item7
+                MonthlyConsumption = summary.Item7,
+                ConsumptionDiff = summary.Item8,
+                WinterAverage = summary.Item9,
+                SummerAverage = summary.Item10,
+                MedianLastYearConsumption = summary.Item11,
+                TrendPrediction = summary.Item12,
+                ModMonthName = summary.Item13
             };
             return Ok(response);
         }
